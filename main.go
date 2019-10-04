@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -93,24 +94,26 @@ func main() {
 
 	s := &ssh.Server{
 		Addr: ":2222",
-		PasswordHandler: func(ctx ssh.Context, pass string) bool {
-			if pass == "test" {
-				// TODO: Check username/passwords
-				log.Println("Password accepted")
-				return true
-			}
-
-			log.Println("Wrong password")
-			return false
-		},
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
-			// TODO: Check username/key
-			if key != nil {
-				log.Println("Key accepted")
-				return true
+			keys := os.Getenv("SSH_KEYS")
+			if len(keys) == 0 {
+				log.Println("No SSH keys loaded")
+				return false
 			}
 
-			log.Println("Wrong key")
+			scanner := bufio.NewScanner(strings.NewReader(keys))
+			for scanner.Scan() {
+				trustedKey, err := ssh.ParsePublicKey([]byte(scanner.Text()))
+				if err != nil {
+					log.Println("Failed to parse configured public key:", scanner.Text())
+				}
+
+				if ssh.KeysEqual(key, trustedKey) {
+					return true
+				}
+			}
+
+			log.Println("Unknown SSH key")
 			return false
 		},
 		ReversePortForwardingCallback: ssh.ReversePortForwardingCallback(func(ctx ssh.Context, host string, port uint32) bool {
