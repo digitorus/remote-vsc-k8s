@@ -2,13 +2,12 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"path/filepath"
+	"os"
 	"strings"
 	"time"
 
@@ -22,7 +21,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/transport/spdy"
-	"k8s.io/client-go/util/homedir"
 
 	"github.com/gliderlabs/ssh"
 	gossh "golang.org/x/crypto/ssh"
@@ -40,15 +38,7 @@ const (
 
 const PortForwardProtocolV1Name = "portforward.k8s.io"
 
-var kubeconfig *string
-
 func main() {
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
 
 	ssh.Handle(func(sess ssh.Session) {
 		sc := make(chan ssh.Signal)
@@ -63,7 +53,7 @@ func main() {
 		name := fmt.Sprintf("remote-vsc-%s", sess.User())
 
 		// we need a logger per session
-		c, err := NewCluster(*kubeconfig)
+		c, err := NewCluster()
 		if err != nil {
 			log.Println(err)
 			sess.Exit(1)
@@ -172,7 +162,7 @@ func channelHandler(srv *ssh.Server, conn *gossh.ServerConn, newChan gossh.NewCh
 	name := fmt.Sprintf("remote-vsc-%s", ctx.User())
 
 	// we need a logger per session
-	c, err := NewCluster(*kubeconfig)
+	c, err := NewCluster()
 	if err != nil {
 		log.Println(err)
 		//sess.Exit(1)
@@ -181,7 +171,7 @@ func channelHandler(srv *ssh.Server, conn *gossh.ServerConn, newChan gossh.NewCh
 
 	req := c.client.CoreV1().RESTClient().Post().
 		Resource("pods").
-		Namespace(apiv1.NamespaceDefault).
+		Namespace(os.Getenv("NAMESPACE")).
 		Name(name).
 		SubResource("portforward")
 
@@ -293,13 +283,13 @@ type Cluster struct {
 	log    chan string
 }
 
-func NewCluster(config string) (*Cluster, error) {
+func NewCluster() (*Cluster, error) {
 	var err error
 
 	c := &Cluster{
 		log: make(chan string),
 	}
-	c.config, err = clientcmd.BuildConfigFromFlags("", config)
+	c.config, err = clientcmd.RESTConfigFromKubeConfig([]byte(os.Getenv("KUBE_CONFIG")))
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +306,7 @@ func (c *Cluster) getTerminal(name string, sess ssh.Session, isTty bool) error {
 	req := c.client.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(name).
-		Namespace(apiv1.NamespaceDefault).
+		Namespace(os.Getenv("NAMESPACE")).
 		SubResource("exec")
 
 	req.VersionedParams(&apiv1.PodExecOptions{
@@ -353,7 +343,7 @@ func (c *Cluster) getTerminal(name string, sess ssh.Session, isTty bool) error {
 }
 
 func (c *Cluster) checkExistingPod(name string) (*apiv1.Pod, error) {
-	podsClient := c.client.CoreV1().Pods(apiv1.NamespaceDefault)
+	podsClient := c.client.CoreV1().Pods(os.Getenv("NAMESPACE"))
 	pod, err := podsClient.Get(name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -404,8 +394,22 @@ func (c *Cluster) waitForPod(name string) error {
 func (c *Cluster) pod(user, name string) error {
 	c.log <- fmt.Sprintf("Creating new pod for %q\n", user)
 
-	procMount := apiv1.UnmaskedProcMount
-	podsClient := c.client.CoreV1().Pods(apiv1.NamespaceDefault)
+	podsClient := c.client.CoreV1().Pods(os.Getenv("NAMESPACE"))
+
+	var privileged bool
+	if os.Getenv("PRIVILEGED") == "true" {
+		privileged = true
+	}
+
+	procMount := apiv1.DefaultProcMount
+	if os.Getenv("PROCMOUNT") == "Unmasked" {
+		procMount = apiv1.UnmaskedProcMount
+	}
+
+	image := "alpine"
+	if os.Getenv("IMAGE") != "" {
+		image = os.Getenv("IMAGE")
+	}
 
 	// TODO: Allow different configrations and images (image from session env?)
 	pod := &apiv1.Pod{
@@ -416,9 +420,10 @@ func (c *Cluster) pod(user, name string) error {
 			Containers: []apiv1.Container{
 				{
 					Name:  "remote-vsc-container",
-					Image: "ubuntu",
+					Image: image,
 					SecurityContext: &apiv1.SecurityContext{
-						ProcMount: &procMount,
+						Privileged: &privileged,
+						ProcMount:  &procMount,
 					},
 					Command: []string{"/usr/bin/tail"},
 					Args:    []string{"-f", "-"},
