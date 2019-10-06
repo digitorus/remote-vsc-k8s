@@ -27,9 +27,10 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
+// END_OF_TRANSMISSION code
 const END_OF_TRANSMISSION = "\u0004"
 
-// Applicaple SSH Request types for Port Forwarding - RFC 4254 7.X
+// Applicable SSH Request types for Port Forwarding - RFC 4254 7.X
 const (
 	DirectForwardRequest       = "direct-tcpip"         // RFC 4254 7.2
 	RemoteForwardRequest       = "tcpip-forward"        // RFC 4254 7.1
@@ -37,6 +38,7 @@ const (
 	CancelRemoteForwardRequest = "cancel-tcpip-forward" // RFC 4254 7.1
 )
 
+// PortForwardProtocolV1Name is required to forward ports to containers
 const PortForwardProtocolV1Name = "portforward.k8s.io"
 
 func main() {
@@ -280,12 +282,14 @@ func channelHandler(srv *ssh.Server, conn *gossh.ServerConn, newChan gossh.NewCh
 	}
 }
 
+// Cluster configuration
 type Cluster struct {
 	config *rest.Config
 	client *kubernetes.Clientset
 	log    chan string
 }
 
+// NewCluster configuration
 func NewCluster() (*Cluster, error) {
 	var err error
 
@@ -382,7 +386,7 @@ func (c *Cluster) waitForPod(name string) error {
 
 		switch pod.Status.Phase {
 		case apiv1.PodPending:
-			c.log <- fmt.Sprintf("Waiting on pod to become availible...\n")
+			c.log <- fmt.Sprintf("Waiting on pod to become available...\n")
 			return false, nil
 		case apiv1.PodFailed:
 			return true, errors.New(pod.Status.Message)
@@ -390,7 +394,7 @@ func (c *Cluster) waitForPod(name string) error {
 			return true, nil
 		}
 
-		return true, errors.New("unkown pod status")
+		return true, errors.New("unknown pod status")
 	})
 }
 
@@ -446,10 +450,12 @@ func (c *Cluster) pod(user, name string) error {
 	return nil
 }
 
+// TerminalSizeQueue handler
 type TerminalSizeQueue struct {
 	w <-chan ssh.Window
 }
 
+// Next terminal size event
 func (t TerminalSizeQueue) Next() *remotecommand.TerminalSize {
 	w := <-t.w
 	return &remotecommand.TerminalSize{
