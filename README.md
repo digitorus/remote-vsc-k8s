@@ -6,7 +6,7 @@
 
 [![Docker Stars](https://img.shields.io/docker/stars/digitorus/remote-vsc-k8s.svg)](https://hub.docker.com/r/digitorus/remote-vsc-k8s)
 [![Docker Pulls](https://img.shields.io/docker/pulls/digitorus/remote-vsc-k8s.svg)](https://hub.docker.com/r/digitorus/remote-vsc-k8s)
-[![Docker Automated build](https://img.shields.io/docker/automated/digitorus/remote-vsc-k8s)](https://hub.docker.com/r/digitorus/remote-vsc-k8s)
+[![Docker Cloud Automated build](https://img.shields.io/docker/cloud/automated/digitorus/remote-vsc-k8s)](https://hub.docker.com/r/digitorus/remote-vsc-k8s)
 [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/digitorus/remote-vsc-k8s)](https://hub.docker.com/r/digitorus/remote-vsc-k8s/builds)
 
 An SSH proxy that created user dedicated Kubernetes pods for [Visual Studio Code Remote (SSH)](https://code.visualstudio.com/docs/remote/ssh) on demand using Kubernetes. 
