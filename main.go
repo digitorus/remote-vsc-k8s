@@ -95,7 +95,7 @@ func main() {
 	log.Println("Starting ssh server on port 2222...")
 
 	s := &ssh.Server{
-		Addr: ":2222",
+		Addr: "0.0.0.0:2222",
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			keys := os.Getenv("SSH_KEYS")
 			if len(keys) == 0 {
