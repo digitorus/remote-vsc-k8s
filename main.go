@@ -418,12 +418,20 @@ func (c *Cluster) pod(user, name string) error {
 		image = os.Getenv("IMAGE")
 	}
 
+	var ips []apiv1.LocalObjectReference
+	if os.Getenv("IMAGE_PULL_SECRET") != "" {
+		ips = append(ips, apiv1.LocalObjectReference{
+			Name: os.Getenv("IMAGE_PULL_SECRET"),
+		})
+	}
+
 	// TODO: Allow different configrations and images (image from session env?)
 	pod := &apiv1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 		Spec: apiv1.PodSpec{
+			ImagePullSecrets: ips,
 			Containers: []apiv1.Container{
 				{
 					Name:  "remote-vsc-container",
