@@ -105,7 +105,7 @@ func main() {
 
 			scanner := bufio.NewScanner(strings.NewReader(keys))
 			for scanner.Scan() {
-				trustedKey, err := ssh.ParsePublicKey([]byte(scanner.Text()))
+				trustedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(scanner.Text()))
 				if err != nil {
 					log.Println("Failed to parse configured public key:", scanner.Text())
 				}
