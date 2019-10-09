@@ -27,9 +27,6 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// END_OF_TRANSMISSION code
-const END_OF_TRANSMISSION = "\u0004"
-
 // Applicable SSH Request types for Port Forwarding - RFC 4254 7.X
 const (
 	DirectForwardRequest       = "direct-tcpip"         // RFC 4254 7.2
@@ -92,13 +89,23 @@ func main() {
 		sess.Exit(0)
 	})
 
-	log.Println("Starting ssh server on port 2222...")
+	host := "127.0.0.1"
+	if os.Getenv("SSH_HOST") != "" {
+		host = os.Getenv("SSH_HOST")
+	}
+
+	port := "2222"
+	if os.Getenv("SSH_PORT") != "" {
+		host = os.Getenv("SSH_PORT")
+	}
+
+	log.Printf("Starting ssh server on port %s:%s...", host, port)
 
 	s := &ssh.Server{
-		Addr: "0.0.0.0:2222",
+		Addr: fmt.Sprintf("%s:%s", host, port),
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
 			keys := os.Getenv("SSH_KEYS")
-			if len(keys) == 0 {
+			if keys == "" {
 				log.Println("No SSH keys loaded")
 				return false
 			}
@@ -135,8 +142,13 @@ func main() {
 		},
 	}
 
-	// TODO: Use configured host key
-	//s.AddHostKey(hostKeySigner)
+	if os.Getenv("SSH_HOST_KEY") != "" {
+		key, err := gossh.ParsePrivateKey([]byte(os.Getenv("SSH_HOST_KEY")))
+		if err != nil {
+			log.Printf("Failed to parse SSH_HOST_KEY %s\n", err)
+		}
+		s.AddHostKey(key)
+	}
 
 	log.Fatal(s.ListenAndServe())
 }
