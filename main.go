@@ -96,7 +96,7 @@ func main() {
 
 	port := "2222"
 	if os.Getenv("SSH_PORT") != "" {
-		host = os.Getenv("SSH_PORT")
+		port = os.Getenv("SSH_PORT")
 	}
 
 	log.Printf("Starting ssh server on port %s:%s...", host, port)
