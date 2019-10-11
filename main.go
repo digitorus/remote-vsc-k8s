@@ -103,7 +103,11 @@ func main() {
 
 	s := &ssh.Server{
 		Addr: fmt.Sprintf("%s:%s", host, port),
-		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
+		PublicKeyHandler: func(ctx ssh.Context, pubKey ssh.PublicKey) bool {
+			if os.Getenv("MSDC_TENANT") != "" && os.Getenv("MSDC_ALL_KEYS") == "true" {
+				return true
+			}
+
 			keys := os.Getenv("SSH_KEYS")
 			if keys == "" {
 				log.Println("No SSH keys loaded")
@@ -114,17 +118,22 @@ func main() {
 			for scanner.Scan() {
 				trustedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(scanner.Text()))
 				if err != nil {
-					log.Println("Failed to parse configured public key:", scanner.Text())
+					log.Printf("Failed to parse configured public key: %q", scanner.Text())
+					continue
 				}
 
-				if ssh.KeysEqual(key, trustedKey) {
+				if ssh.KeysEqual(pubKey, trustedKey) {
 					return true
 				}
+			}
+			if err := scanner.Err(); err != nil {
+				log.Println("Error scanning authorized keys:", err)
 			}
 
 			log.Println("Unknown SSH key")
 			return false
 		},
+		SessionRequestCallback: SessionRequestCallback,
 		ReversePortForwardingCallback: ssh.ReversePortForwardingCallback(func(ctx ssh.Context, host string, port uint32) bool {
 			log.Printf("Accepted binding for host %q on port %d\n", host, port)
 			return true
@@ -468,6 +477,43 @@ func (c *Cluster) pod(user, name string) error {
 	}
 	c.log <- fmt.Sprintf("Created pod %q\n", result.GetObjectMeta().GetName())
 	return nil
+}
+
+// SessionRequestCallback is a callback for allowing or denying SSH sessions
+func SessionRequestCallback(sess ssh.Session, requestType string) bool {
+	if os.Getenv("MSDC_TENANT") != "" {
+		msdc, err := NewMSDC(os.Getenv("MSDC_TENANT"), os.Getenv("MSDC_APPLICATION"))
+		if err != nil {
+			log.Println(err)
+			return false
+		}
+
+		dc, err := msdc.Get(os.Getenv("MSDC_RESOURCE"))
+		if err != nil {
+			return false
+		}
+
+		// Show the device code to the client.
+		io.WriteString(sess, fmt.Sprintf("\n%s\n", *dc.Message))
+
+		token, err := msdc.WaitForUserCompletion(dc)
+		if err != nil {
+			log.Println(err)
+			return false
+		}
+
+		// Do we need to check for a resource?
+		// os.Getenv("MSDC_RESOURCE")
+
+		if !token.IsExpired() {
+			return true
+		}
+
+		return false
+	}
+
+	// No additional session checks required
+	return true
 }
 
 // TerminalSizeQueue handler
